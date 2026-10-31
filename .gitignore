@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+**/venv/
+**/.venv/
+
+# Secrets
+.env
+**/.env
+config/api_keys.py
+config/api_tg_keys.py
+**/config/api_keys.py
+**/config/api_tg_keys.py
+
+# Duplicate / local copies
+exchanges copy/
+**/exchanges copy/
+
+# Outcome journal
+data/
+**/data/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

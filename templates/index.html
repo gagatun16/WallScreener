@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WallScreener</title>
+    <style>
+        :root {
+            --bg: #0b0e11;
+            --panel: #12161c;
+            --line: #1e2329;
+            --text: #eaecef;
+            --muted: #848e9c;
+            --bid: #0ecb81;
+            --ask: #f6465d;
+            --accent: #f0b90b;
+            --row: #161a21;
+            --hover: #1c2128;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        }
+        .page {
+            height: 100%;
+            display: grid;
+            grid-template-rows: 46px minmax(0, 1fr);
+        }
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 0 16px;
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+        }
+        .brand {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent);
+            white-space: nowrap;
+        }
+        .tabs { display: flex; gap: 4px; }
+        .tab {
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .tab.active { color: var(--accent); border-color: var(--accent); }
+        .page.tab-journal .filters { display: none; }
+        .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btc-chip {
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            color: var(--accent);
+            border-color: var(--accent);
+            flex-shrink: 0;
+        }
+        .btc-chip.active { background: rgba(240, 185, 11, 0.12); }
+        .chip {
+            border: 1px solid var(--line);
+            background: transparent;
+            color: var(--muted);
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .chip.active { color: var(--text); border-color: var(--accent); color: var(--accent); }
+        .status {
+            margin-left: auto;
+            display: flex;
+            gap: 14px;
+            font-size: 12px;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        .dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            display: inline-block; margin-right: 6px;
+            background: var(--ask);
+        }
+        .dot.on { background: var(--bid); }
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            min-height: 0;
+            height: 100%;
+        }
+        .tape, .journal {
+            min-height: 0;
+            overflow: auto;
+            display: none;
+            height: 100%;
+        }
+        .page.tab-tape .tape { display: block; }
+        .page.tab-journal .journal { display: flex; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #0f1318;
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            text-align: right;
+            padding: 8px 8px;
+            border-bottom: 1px solid var(--line);
+        }
+        th.left, td.left { text-align: left; }
+        td {
+            padding: 7px 8px;
+            border-bottom: 1px solid var(--line);
+            font-variant-numeric: tabular-nums;
+            font-family: "IBM Plex Mono", "Consolas", monospace;
+            text-align: right;
+            white-space: nowrap;
+        }
+        tr:hover td { background: var(--hover); }
+        tr.selected td { background: #1a2330; }
+        tr.buy td { box-shadow: inset 3px 0 0 var(--bid); }
+        tr.sell td { box-shadow: inset 3px 0 0 var(--ask); }
+        .sym { font-weight: 700; color: var(--text); }
+        .ex {
+            font-size: 10px;
+            color: #0b0e11;
+            background: #848e9c;
+            padding: 1px 5px;
+            border-radius: 2px;
+            margin-left: 6px;
+            font-family: "IBM Plex Sans", sans-serif;
+            font-weight: 700;
+        }
+        .ex.binance { background: #f0b90b; }
+        .ex.bybit { background: #f7a600; color: #111; }
+        .ex.okx { background: #eaecef; }
+        .ex.bingx { background: #2ed573; }
+        .ex.bitget { background: #00d1c1; }
+        .ex.mexc { background: #3db9ff; }
+        .side { font-size: 11px; font-weight: 700; }
+        .side.bid { color: var(--bid); }
+        .side.ask { color: var(--ask); }
+        .pct.near { color: var(--bid); }
+        .pct.far { color: var(--ask); }
+        .tape tbody tr { cursor: pointer; }
+        .mini-chart {
+            width: 88px;
+            height: 32px;
+            background: #0b0e11;
+            overflow: hidden;
+        }
+        .mini-chart img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .chart-loading {
+            background: linear-gradient(90deg, #1a1f27 25%, #242b36 50%, #1a1f27 75%);
+            background-size: 200% 100%;
+            animation: loading 1.4s infinite;
+        }
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .empty {
+            color: var(--muted);
+            font-size: 13px;
+            text-align: center;
+            padding: 24px;
+        }
+        .journal {
+            border-top: none;
+            background: var(--panel);
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .journal-head {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: var(--muted);
+            border-bottom: 1px solid var(--line);
+            flex-shrink: 0;
+        }
+        .journal-stats {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            min-width: 0;
+        }
+        .journal-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 10px;
+            align-items: center;
+        }
+        .journal-filter-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
+        }
+        .journal-filter-label {
+            font-size: 10px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-right: 2px;
+        }
+        .journal-filters input[type="search"] {
+            width: 140px;
+            height: 24px;
+            border: 1px solid var(--line);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 11px;
+            padding: 0 8px;
+            border-radius: 3px;
+        }
+        .journal-filters input[type="search"]:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .journal-visible {
+            margin-left: auto;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        .journal-head .chip {
+            margin-left: 0;
+            flex-shrink: 0;
+        }
+        .journal-scroll {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+        }
+        .journal table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: max-content;
+            min-width: 100%;
+        }
+        .journal thead th {
+            z-index: 3;
+        }
+        .journal th.sticky-col,
+        .journal td.sticky-col {
+            position: sticky;
+        }
+        .journal thead th.sticky-col {
+            z-index: 5;
+            background: #0f1318;
+        }
+        .journal tbody td.sticky-col {
+            z-index: 1;
+            background: var(--panel);
+        }
+        .journal .s0 { left: 0; min-width: 44px; width: 44px; text-align: center; }
+        .journal .s1 { left: 44px; min-width: 148px; width: 148px; }
+        .journal .s2 { left: 192px; min-width: 80px; width: 80px; }
+        .journal .s3 { left: 272px; min-width: 88px; width: 88px; }
+        .journal .s4 { left: 360px; min-width: 124px; width: 124px; }
+        .journal .s5 { left: 484px; min-width: 112px; width: 112px; border-right: 1px solid var(--line); }
+        .fav-star {
+            border: 0;
+            background: transparent;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1;
+            padding: 0;
+            cursor: pointer;
+            width: 100%;
+        }
+        .fav-star.on,
+        .fav-star:hover { color: var(--accent); }
+        .fav-star:disabled { cursor: default; opacity: 0.35; }
+        .fav-star:disabled:hover { color: var(--muted); }
+        .journal tbody tr:hover td.sticky-col { background: var(--hover); }
+        .journal tbody tr.same-wall td { background: #182230; }
+        .journal tbody tr.same-wall td.sticky-col { background: #182230; }
+        .journal tbody tr.selected td { background: #1a2330; }
+        .journal tbody tr.selected td.sticky-col { background: #1a2330; }
+        .page.tab-journal .journal-head {
+            padding: 10px 16px;
+        }
+        .outcome-bounce { color: var(--bid); font-weight: 700; }
+        .outcome-bounce-fut { color: #7c9cff; font-weight: 700; }
+        .outcome-pull { color: var(--accent); font-weight: 700; }
+        .outcome-pull-none { color: #c9a227; font-weight: 700; }
+        .outcome-eat { color: #e5a84b; font-weight: 700; }
+        .outcome-touch { color: #c4b5a0; font-weight: 700; }
+        .outcome-break { color: var(--ask); font-weight: 700; }
+        .journal td, .journal th { cursor: default; }
+        .journal td[title] { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .journal tbody tr[data-idx] { cursor: pointer; }
+        .journal-chart {
+            display: none;
+            flex-direction: column;
+            flex-shrink: 0;
+            height: 640px;
+            border-top: 1px solid var(--line);
+            background: var(--panel);
+        }
+        .journal-chart.open { display: flex; }
+        .journal-chart-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 12px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text);
+            border-bottom: 1px solid var(--line);
+            flex-shrink: 0;
+        }
+        .journal-chart-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .journal-chart-frame {
+            flex: 1;
+            min-height: 0;
+            background: #0b0e11;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            color: var(--muted);
+            overflow: hidden;
+        }
+        .journal-chart-slot {
+            flex: 1 1 50%;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid var(--line);
+        }
+        .journal-chart-slot:last-child { border-bottom: none; }
+        .journal-chart-frame.four {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            aspect-ratio: 2 / 1;
+            width: 100%;
+            height: auto;
+            max-height: 100%;
+            margin: 0 auto;
+        }
+        .journal-chart-frame.four .journal-chart-slot {
+            flex: unset;
+            min-height: 0;
+            border-right: 1px solid var(--line);
+        }
+        .journal-chart-frame.four .journal-chart-slot:nth-child(2n) {
+            border-right: none;
+        }
+        .journal-chart-frame.four .journal-chart-slot:nth-last-child(-n+2) {
+            border-bottom: none;
+        }
+        .journal-chart-frame.six {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            aspect-ratio: 3 / 2;
+            width: 100%;
+            height: auto;
+            max-height: 100%;
+            margin: 0 auto;
+        }
+        .journal-chart-frame.six .journal-chart-slot {
+            flex: unset;
+            min-height: 0;
+            border-right: 1px solid var(--line);
+        }
+        .journal-chart-frame.six .journal-chart-slot:nth-child(3n) {
+            border-right: none;
+        }
+        .journal-chart-frame.six .journal-chart-slot:nth-last-child(-n+3) {
+            border-bottom: none;
+        }
+        .btc-up { color: var(--bid); font-weight: 700; }
+        .btc-down { color: var(--ask); font-weight: 700; }
+        .journal-chart-slot-label {
+            flex-shrink: 0;
+            padding: 4px 10px 0;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            color: var(--text);
+        }
+        .journal-chart-slot img {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .journal-chart.zoom {
+            position: fixed;
+            inset: 12px;
+            z-index: 50;
+            height: auto;
+            border: 1px solid var(--line);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+        }
+        .page.journal-chart-open .journal-chart.open {
+            height: min(48vw, 46vh, 560px);
+        }
+        .page.journal-chart-open .journal-chart.zoom {
+            height: auto;
+        }
+        .page.journal-chart-zoom .journal {
+            overflow: visible;
+        }
+        @media (max-width: 1100px) {
+            .page { grid-template-rows: 86px minmax(0, 1fr); }
+        }
+        .chart-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            background: rgba(0, 0, 0, 0.72);
+            padding: 20px;
+            align-items: center;
+            justify-content: center;
+        }
+        .chart-modal.open { display: flex; }
+        .chart-modal-card {
+            flex: none;
+            width: min(92vmin, 880px);
+            height: min(92vmin, 880px);
+            max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 32px);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+            display: flex;
+            flex-direction: column;
+        }
+        .chart-modal-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+            border-bottom: 1px solid var(--line);
+            flex-shrink: 0;
+        }
+        .chart-modal-head span { color: #c8cdd6; font-weight: 600; margin-left: 8px; }
+        .chart-close {
+            margin-left: auto;
+            width: 32px;
+            height: 32px;
+            border: 1px solid var(--line);
+            background: transparent;
+            color: var(--text);
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        .chart-close:hover { border-color: var(--ask); color: var(--ask); }
+        .chart-modal-body {
+            flex: 1;
+            min-height: 0;
+            background: #0b0e11;
+            display: flex;
+            flex-direction: column;
+            color: var(--muted);
+            overflow: hidden;
+        }
+        .chart-modal-body.two {
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr 1fr;
+        }
+        .chart-modal-body .journal-chart-slot {
+            min-height: 0;
+            flex: 1;
+        }
+        .chart-modal-card.btc {
+            width: min(96vw, 1180px);
+            height: min(90vh, 780px);
+        }
+        .btc-tv {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            height: 100%;
+            background: #0b0e11;
+        }
+        .btc-tv iframe {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="page tab-tape">
+        <header>
+            <div class="brand">WallScreener</div>
+            <nav class="tabs">
+                <button type="button" class="tab active" data-tab="tape">Лента</button>
+                <button type="button" class="tab" data-tab="journal">Журнал</button>
+            </nav>
+            <div class="filters" id="filters"></div>
+            <button type="button" class="chip btc-chip" id="btcChartBtn">BTC</button>
+            <div class="status">
+                <span id="statusText"><span class="dot"></span>загрузка</span>
+                <span id="wallCount">стен: 0</span>
+                <span id="updateTime">--:--:--</span>
+            </div>
+        </header>
+        <div class="workspace">
+            <div class="tape">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="left">Биржа</th>
+                            <th class="left">Сторона</th>
+                            <th class="left">Символ</th>
+                            <th>Уровень</th>
+                            <th>Расст. %</th>
+                            <th>Подх.</th>
+                            <th>Отск.</th>
+                            <th>Жизнь</th>
+                            <th>волат.%</th>
+                            <th>К сред.</th>
+                            <th>К пред.</th>
+                            <th>График</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tapeBody">
+                        <tr><td class="empty" colspan="12">Нет живых стен старше 5 минут</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        <section class="journal">
+            <div class="journal-head">
+                <div class="journal-stats" id="journalSummary">Журнал</div>
+                <div class="journal-filters">
+                    <input type="search" id="journalSymbolFilter" placeholder="Тикер" autocomplete="off" spellcheck="false">
+                    <button type="button" class="chip" id="journalFavoriteFilter" aria-pressed="false">★ избранные</button>
+                    <span class="journal-filter-group" id="journalExchangeFilters"></span>
+                    <span class="journal-filter-group" id="journalSideFilters"></span>
+                    <span class="journal-filter-group" id="journalOutcomeFilters"></span>
+                    <span class="journal-visible" id="journalVisibleCount"></span>
+                </div>
+            </div>
+            <div class="journal-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="left sticky-col s0" title="Избранное">Избр.</th>
+                            <th class="left sticky-col s1">Время</th>
+                            <th class="left sticky-col s2">Биржа</th>
+                            <th class="left sticky-col s3">Сторона</th>
+                            <th class="left sticky-col s4">Символ</th>
+                            <th class="left sticky-col s5">Исход</th>
+                            <th>вход спот</th>
+                            <th>подх.%</th>
+                            <th title="Ближайший фитиль к стене в этом подходе; на новом подходе сбрасывается">min%</th>
+                            <th>last%</th>
+                            <th title="Макс. ход от этого подхода в сторону отскока; на новом подходе сбрасывается">max%</th>
+                            <th title="Ход против отскока на споте после этого подхода; на новом подходе сбрасывается">против С</th>
+                            <th>отск.%</th>
+                            <th>цена отск.</th>
+                            <th>вход фьюч</th>
+                            <th title="(вход фьюч / вход спот − 1) × 100. Плюс — фьюч дороже спота">базис%</th>
+                            <th title="Расстояние до стены по close фьюч 1m на момент строки">last% Ф</th>
+                            <th title="Макс. ход фьючерса в сторону отскока после этого подхода; на новом подходе сбрасывается">max% Ф</th>
+                            <th title="Ход против отскока на Ф после этого подхода; на новом подходе сбрасывается">против Ф</th>
+                            <th>Подх.</th>
+                            <th>Отск.</th>
+                            <th>Жизнь</th>
+                            <th>до подх.</th>
+                            <th>до отск.</th>
+                            <th>до закр.</th>
+                            <th>сетап</th>
+                            <th>Уровень</th>
+                            <th>пик$</th>
+                            <th>текущий$</th>
+                            <th>qty</th>
+                            <th>Разбор</th>
+                            <th>разб.ат.</th>
+                            <th>ост%</th>
+                            <th>съедено$</th>
+                            <th title="Цена ушла за стену после этого подхода; на новом подходе сбрасывается">за стеной эп.</th>
+                            <th>волат.%</th>
+                            <th>к сред.</th>
+                            <th>к пред.</th>
+                            <th>к тек.</th>
+                            <th>наход.%</th>
+                            <th title="Шаг цены спота в % от цены стены">шаг спот%</th>
+                            <th title="Шаг цены фьючерса в % от цены стены">шаг фьюч%</th>
+                            <th title="Спотовый BTCUSDT: 12×5m на момент записи, текущая свеча входит своим close">BTC%</th>
+                            <th title="Спотовый BTCUSDT: 12×5m на этот подход, не на первый. Текущая 5m подхода входит close">BTC подх%</th>
+                            <th title="Спотовый BTCUSDT от этого подхода до отскока/пробоя, не от первого касания">BTC отск%</th>
+                            <th class="left">id</th>
+                        </tr>
+                    </thead>
+                    <tbody id="journalBody">
+                        <tr><td class="empty" colspan="46">Закрытых плотностей ещё нет</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="journal-chart" id="journalChart">
+                <div class="journal-chart-head">
+                    <span id="journalChartTitle">График записи</span>
+                    <div class="journal-chart-actions">
+                        <button type="button" class="chip" id="journalChartZoom" aria-expanded="false">Увеличить</button>
+                        <button type="button" class="chart-close" id="journalChartClose" aria-label="Закрыть">×</button>
+                    </div>
+                </div>
+                <div class="journal-chart-frame" id="journalChartFrame">Выберите строку в журнале</div>
+            </div>
+        </section>
+        </div>
+    </div>
+    <div class="chart-modal" id="densityChartModal">
+        <div class="chart-modal-card" id="densityChartCard">
+            <div class="chart-modal-head">
+                <div id="densityChartTitle">График</div>
+                <button type="button" class="chart-close" id="densityChartClose" aria-label="Закрыть">×</button>
+            </div>
+            <div class="chart-modal-body" id="densityChartFrame">Выберите стену в ленте</div>
+        </div>
+    </div>
+    <div class="chart-modal" id="btcChartModal">
+        <div class="chart-modal-card btc" id="btcChartCard">
+            <div class="chart-modal-head">
+                <div>BTCUSDT <span>Binance · TradingView</span></div>
+                <button type="button" class="chart-close" id="btcChartClose" aria-label="Закрыть">×</button>
+            </div>
+            <div class="chart-modal-body">
+                <div class="btc-tv" id="btcTvChart"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let chartCache = new Map();
+        let currentDensity = null;
+        let activeExchange = 'ALL';
+        let lastTape = [];
+        let lastJournalRows = [];
+        let selectedJournalKey = '';
+        let hoveredWallId = '';
+        let journalChartZoom = false;
+        let activeTab = 'tape';
+        let btcTvReady = false;
+        let journalFilter = { exchange: 'ALL', side: 'ALL', outcome: 'ALL', symbol: '', favorites: false };
+        const JOURNAL_FAVORITES_KEY = 'journalFavoriteWalls';
+        let journalFavorites = new Set();
+        const JOURNAL_SIDES = [
+            { id: 'ALL', label: 'Все' },
+            { id: 'ПОКУПКА', label: 'Покупка' },
+            { id: 'ПРОДАЖА', label: 'Продажа' },
+        ];
+        const JOURNAL_OUTCOMES = [
+            { id: 'ALL', label: 'Все' },
+            { id: 'отскок', label: 'отскок' },
+            { id: 'отскок фьюч', label: 'отскок фьюч' },
+            { id: 'подход', label: 'подход' },
+            { id: 'разъедание', label: 'разъедание' },
+            { id: 'снятие', label: 'снятие' },
+            { id: 'Снятие без атаки', label: 'Снятие без атаки' },
+            { id: 'пробой', label: 'пробой' },
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.tab').forEach((button) => {
+                button.addEventListener('click', () => setActiveTab(button.dataset.tab));
+            });
+            document.getElementById('journalChartZoom').addEventListener('click', () => {
+                setJournalChartZoom(!journalChartZoom);
+            });
+            document.getElementById('journalChartClose').addEventListener('click', closeJournalChart);
+            document.getElementById('densityChartClose').addEventListener('click', closeDensityChart);
+            document.getElementById('densityChartModal').addEventListener('click', closeDensityChart);
+            document.getElementById('densityChartCard').addEventListener('click', (event) => event.stopPropagation());
+            document.getElementById('btcChartBtn').addEventListener('click', openBtcChart);
+            document.getElementById('btcChartClose').addEventListener('click', closeBtcChart);
+            document.getElementById('btcChartModal').addEventListener('click', closeBtcChart);
+            document.getElementById('btcChartCard').addEventListener('click', (event) => event.stopPropagation());
+            document.getElementById('journalBody').addEventListener('click', (event) => {
+                const star = event.target.closest('.fav-star');
+                if (star) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleJournalFavorite(star.dataset.wall);
+                    return;
+                }
+                const rowEl = event.target.closest('tr');
+                if (!rowEl || rowEl.dataset.idx === undefined) return;
+                const row = lastJournalRows[Number(rowEl.dataset.idx)];
+                if (row) openJournalChart(row);
+            });
+            document.getElementById('journalBody').addEventListener('mouseover', (event) => {
+                const rowEl = event.target.closest('tr[data-wall]');
+                hoveredWallId = rowEl ? rowEl.dataset.wall : '';
+                paintJournalHighlight();
+            });
+            document.getElementById('journalBody').addEventListener('mouseleave', () => {
+                hoveredWallId = '';
+                paintJournalHighlight();
+            });
+            document.getElementById('journalSymbolFilter').addEventListener('input', (event) => {
+                journalFilter.symbol = event.target.value || '';
+                renderJournalRows();
+            });
+            document.getElementById('journalFavoriteFilter').addEventListener('click', () => {
+                journalFilter.favorites = !journalFilter.favorites;
+                renderJournalRows();
+            });
+            loadJournalFavorites();
+            fillJournalChoiceFilters();
+            document.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape') return;
+                if (document.getElementById('btcChartModal').classList.contains('open')) {
+                    closeBtcChart();
+                    return;
+                }
+                if (document.getElementById('densityChartModal').classList.contains('open')) {
+                    closeDensityChart();
+                    return;
+                }
+                if (journalChartZoom) {
+                    setJournalChartZoom(false);
+                    return;
+                }
+                if (document.querySelector('.page').classList.contains('journal-chart-open')) {
+                    closeJournalChart();
+                    return;
+                }
+            });
+            refreshAllData();
+            setInterval(refreshAllData, 30000);
+        });
+
+        function journalRowKey(row) {
+            return row.chart_id || [row.closed_at, row.exchange, row.symbol, row.wall_price, row.side].join('|');
+        }
+
+        function journalWallId(row) {
+            return String((row && row.wall_id) || '').trim();
+        }
+
+        function loadJournalFavorites() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(JOURNAL_FAVORITES_KEY) || '[]');
+                journalFavorites = new Set(
+                    (Array.isArray(raw) ? raw : []).map((item) => String(item || '').trim()).filter(Boolean)
+                );
+            } catch (error) {
+                journalFavorites = new Set();
+            }
+        }
+
+        function saveJournalFavorites() {
+            localStorage.setItem(JOURNAL_FAVORITES_KEY, JSON.stringify([...journalFavorites]));
+        }
+
+        function isJournalFavorite(wallId) {
+            return Boolean(wallId) && journalFavorites.has(wallId);
+        }
+
+        function toggleJournalFavorite(wallId) {
+            const id = String(wallId || '').trim();
+            if (!id) return;
+            if (journalFavorites.has(id)) journalFavorites.delete(id);
+            else journalFavorites.add(id);
+            saveJournalFavorites();
+            renderJournalRows();
+        }
+
+        function selectedJournalWallId() {
+            if (!selectedJournalKey) return '';
+            const row = lastJournalRows.find((item) => journalRowKey(item) === selectedJournalKey);
+            return journalWallId(row);
+        }
+
+        function paintJournalHighlight() {
+            const wall = hoveredWallId || selectedJournalWallId();
+            document.querySelectorAll('#journalBody tr[data-idx]').forEach((tr) => {
+                tr.classList.toggle('same-wall', Boolean(wall) && tr.dataset.wall === wall);
+                tr.classList.toggle('selected', tr.dataset.key === selectedJournalKey);
+            });
+        }
+
+        function fillJournalChoiceFilters() {
+            const sideBox = document.getElementById('journalSideFilters');
+            sideBox.innerHTML = '<span class="journal-filter-label">сторона</span>';
+            JOURNAL_SIDES.forEach((item) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'chip';
+                btn.dataset.value = item.id;
+                btn.textContent = item.label;
+                btn.addEventListener('click', () => {
+                    journalFilter.side = item.id;
+                    renderJournalRows();
+                });
+                sideBox.appendChild(btn);
+            });
+            const outBox = document.getElementById('journalOutcomeFilters');
+            outBox.innerHTML = '<span class="journal-filter-label">исход</span>';
+            JOURNAL_OUTCOMES.forEach((item) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'chip';
+                btn.dataset.value = item.id;
+                btn.textContent = item.label;
+                btn.addEventListener('click', () => {
+                    journalFilter.outcome = item.id;
+                    renderJournalRows();
+                });
+                outBox.appendChild(btn);
+            });
+        }
+
+        function renderJournalExchangeFilters() {
+            const box = document.getElementById('journalExchangeFilters');
+            const names = [...new Set(lastJournalRows.map((row) => row.exchange).filter(Boolean))].sort();
+            box.innerHTML = '<span class="journal-filter-label">биржа</span>';
+            ['ALL', ...names].forEach((name) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'chip' + (journalFilter.exchange === name ? ' active' : '');
+                btn.textContent = name === 'ALL' ? 'Все' : name;
+                btn.addEventListener('click', () => {
+                    journalFilter.exchange = name;
+                    renderJournalRows();
+                });
+                box.appendChild(btn);
+            });
+        }
+
+        function markJournalFilterChips() {
+            document.querySelectorAll('#journalSideFilters .chip').forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.value === journalFilter.side);
+            });
+            document.querySelectorAll('#journalOutcomeFilters .chip').forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.value === journalFilter.outcome);
+            });
+            document.querySelectorAll('#journalExchangeFilters .chip').forEach((btn) => {
+                const name = btn.textContent === 'Все' ? 'ALL' : btn.textContent;
+                btn.classList.toggle('active', name === journalFilter.exchange);
+            });
+            const fav = document.getElementById('journalFavoriteFilter');
+            if (fav) {
+                fav.classList.toggle('active', Boolean(journalFilter.favorites));
+                fav.setAttribute('aria-pressed', journalFilter.favorites ? 'true' : 'false');
+            }
+        }
+
+        function rowMatchesJournalFilter(row) {
+            if (journalFilter.favorites && !isJournalFavorite(journalWallId(row))) return false;
+            if (journalFilter.exchange !== 'ALL' && row.exchange !== journalFilter.exchange) return false;
+            if (journalFilter.side !== 'ALL' && row.side !== journalFilter.side) return false;
+            if (journalFilter.outcome !== 'ALL' && row.outcome !== journalFilter.outcome) return false;
+            const query = journalFilter.symbol.trim().toLowerCase();
+            if (!query) return true;
+            const symbol = String(row.symbol || '').toLowerCase();
+            const wall = journalWallId(row).toLowerCase();
+            return symbol.includes(query) || wall.includes(query);
+        }
+
+        function renderJournalRows() {
+            const body = document.getElementById('journalBody');
+            const visible = lastJournalRows
+                .map((row, index) => ({ row, index }))
+                .filter((item) => rowMatchesJournalFilter(item.row));
+            const shown = document.getElementById('journalVisibleCount');
+            if (shown) {
+                shown.textContent = lastJournalRows.length
+                    ? `видно ${visible.length} из ${lastJournalRows.length}`
+                    : '';
+            }
+            markJournalFilterChips();
+            if (!lastJournalRows.length) {
+                body.innerHTML = '<tr><td class="empty" colspan="46">Закрытых плотностей ещё нет</td></tr>';
+                return;
+            }
+            if (!visible.length) {
+                body.innerHTML = '<tr><td class="empty" colspan="46">Нет строк по фильтру</td></tr>';
+                return;
+            }
+            body.innerHTML = visible.map(({ row, index }) => {
+                const key = journalRowKey(row);
+                const wall = journalWallId(row);
+                const fav = isJournalFavorite(wall);
+                return `
+                <tr data-idx="${index}" data-key="${key}" data-wall="${wall}" class="${key === selectedJournalKey ? 'selected' : ''}">
+                    <td class="left sticky-col s0">
+                        <button type="button" class="fav-star${fav ? ' on' : ''}" data-wall="${wall}" aria-label="Избранное" aria-pressed="${fav ? 'true' : 'false'}" ${wall ? '' : 'disabled'}>★</button>
+                    </td>
+                    <td class="left sticky-col s1">${formatClosedAt(row.closed_at)}</td>
+                    <td class="left sticky-col s2">${row.exchange || ''}</td>
+                    <td class="left sticky-col s3">${row.side || ''}</td>
+                    <td class="left sticky-col s4">${row.symbol || ''}</td>
+                    <td class="left sticky-col s5 ${outcomeClass(row.outcome)}">${row.outcome || ''}</td>
+                    <td>${row.touch_price || ''}</td>
+                    <td>${formatMinPercent(row.touch_percent)}</td>
+                    <td>${formatMinPercent(row.min_percent)}</td>
+                    <td>${formatMinPercent(row.last_percent)}</td>
+                    <td>${formatMinPercent(row.max_bounce)}</td>
+                    <td>${formatMinPercent(row.spot_adverse_pct)}</td>
+                    <td>${formatMinPercent(row.bounce_move)}</td>
+                    <td>${row.bounce_price || ''}</td>
+                    <td>${row.fut_touch_price || ''}</td>
+                    <td class="${btcMoveClass(row.basis_pct)}">${formatBtcMove(row.basis_pct)}</td>
+                    <td>${formatFutByBasis(row, row.last_fut_percent)}</td>
+                    <td>${formatFutByBasis(row, row.max_fut_bounce)}</td>
+                    <td>${formatFutByBasis(row, row.fut_adverse_pct)}</td>
+                    <td>${row.touch_count || '0'}</td>
+                    <td>${row.bounce_count || '0'}</td>
+                    <td>${lifeMinutes(row)}</td>
+                    <td>${row.min_to_first_touch !== '' && row.min_to_first_touch != null ? row.min_to_first_touch : ''}</td>
+                    <td>${row.min_touch_to_bounce !== '' && row.min_touch_to_bounce != null ? row.min_touch_to_bounce : ''}</td>
+                    <td>${row.min_touch_to_close !== '' && row.min_touch_to_close != null ? row.min_touch_to_close : ''}</td>
+                    <td>${row.min_first_touch_to_close !== '' && row.min_first_touch_to_close != null ? row.min_first_touch_to_close : ''}</td>
+                    <td>${row.wall_price || ''}</td>
+                    <td>${formatUsd(row.peak_order_usdt)}</td>
+                    <td>${formatUsd(row.order_size_usdt)}</td>
+                    <td>${formatUsd(row.qty_size)}</td>
+                    <td>${row.eaten_ratio || ''}</td>
+                    <td>${row.attack_eaten_ratio || ''}</td>
+                    <td>${row.remaining_pct !== '' && row.remaining_pct != null ? row.remaining_pct : ''}</td>
+                    <td>${formatUsd(row.eaten_usdt)}</td>
+                    <td>${row.price_beyond_episode || ''}</td>
+                    <td>${formatMinPercent(row.volatility)}</td>
+                    <td>${formatRatio(row.volume_ratio_avg)}</td>
+                    <td>${formatRatio(row.volume_ratio_last)}</td>
+                    <td>${formatRatio(row.volume_ratio_current)}</td>
+                    <td>${formatMinPercent(row.found_percent)}</td>
+                    <td>${formatTickPct(row.spot_tick_pct)}</td>
+                    <td>${formatTickPct(row.fut_tick_pct)}</td>
+                    <td class="${btcMoveClass(row.btc_move_12x5m)}">${formatBtcMove(row.btc_move_12x5m)}</td>
+                    <td class="${btcMoveClass(row.btc_touch_12x5m)}">${formatBtcMove(row.btc_touch_12x5m)}</td>
+                    <td class="${btcMoveClass(row.btc_bounce_nx5m)}">${formatBtcMove(row.btc_bounce_nx5m)}</td>
+                    <td class="left" title="${row.wall_id || ''}">${row.wall_id || ''}</td>
+                </tr>
+            `;
+            }).join('');
+            paintJournalHighlight();
+        }
+
+        function openJournalChart(row) {
+            selectedJournalKey = journalRowKey(row);
+            document.querySelector('.page').classList.add('journal-chart-open');
+            document.getElementById('journalChart').classList.add('open');
+            const title = [row.symbol, row.exchange, row.outcome, formatBtcMove(row.btc_move_12x5m, true)].filter(Boolean).join(' · ');
+            document.getElementById('journalChartTitle').textContent = title || 'График записи';
+            const frame = document.getElementById('journalChartFrame');
+            if (row.chart_id) {
+                const id = row.chart_id;
+                const hideSlot = "this.closest('.journal-chart-slot').style.display='none'";
+                const slot = (label, suffix) => {
+                    const src = encodeURIComponent(id + suffix);
+                    return (
+                        `<div class="journal-chart-slot">` +
+                            `<div class="journal-chart-slot-label">${label}</div>` +
+                            `<img src="/api/charts/${src}.png" alt="${title} ${label}" onerror="${hideSlot}">` +
+                        `</div>`
+                    );
+                };
+                const showBtc = row.btc_move_12x5m !== '' && row.btc_move_12x5m != null;
+                frame.classList.toggle('six', showBtc);
+                frame.classList.toggle('four', !showBtc);
+                frame.innerHTML =
+                    slot('Спот 1m', '_1m') +
+                    slot('Фьючерс 1m', '_fut_1m') +
+                    (showBtc ? slot('BTC 1m', '_btc_1m') : '') +
+                    slot('Спот 5m', '') +
+                    slot('Фьючерс 5m', '_fut') +
+                    (showBtc ? slot('BTC 5m', '_btc_5m') : '');
+            } else {
+                frame.classList.remove('four', 'six');
+                frame.textContent = 'График не сохранялся — снимок есть только у новых закрытий';
+            }
+            document.querySelectorAll('#journalBody tr').forEach(tr => {
+                tr.classList.toggle('selected', tr.dataset.key === selectedJournalKey);
+            });
+            paintJournalHighlight();
+        }
+
+        function setJournalChartZoom(on) {
+            journalChartZoom = on;
+            const page = document.querySelector('.page');
+            const chart = document.getElementById('journalChart');
+            const button = document.getElementById('journalChartZoom');
+            page.classList.toggle('journal-chart-zoom', on);
+            chart.classList.toggle('zoom', on);
+            button.textContent = on ? 'Свернуть' : 'Увеличить';
+            button.setAttribute('aria-expanded', on ? 'true' : 'false');
+        }
+
+        function closeJournalChart() {
+            selectedJournalKey = '';
+            setJournalChartZoom(false);
+            document.querySelector('.page').classList.remove('journal-chart-open');
+            document.getElementById('journalChart').classList.remove('open');
+            document.getElementById('journalChartTitle').textContent = 'График записи';
+            const frame = document.getElementById('journalChartFrame');
+            frame.classList.remove('four', 'six');
+            frame.textContent = 'Выберите строку в журнале';
+            paintJournalHighlight();
+        }
+
+        function setActiveTab(tab) {
+            activeTab = tab === 'journal' ? 'journal' : 'tape';
+            const page = document.querySelector('.page');
+            page.classList.toggle('tab-tape', activeTab === 'tape');
+            page.classList.toggle('tab-journal', activeTab === 'journal');
+            document.querySelectorAll('.tab').forEach((button) => {
+                button.classList.toggle('active', button.dataset.tab === activeTab);
+            });
+            if (activeTab === 'tape') closeJournalChart();
+            if (activeTab === 'journal') refreshJournal();
+        }
+
+        function createSafeId(prefix, ...parts) {
+            return prefix + '-' + parts.join('-').replace(/[^a-zA-Z0-9_-]/g, '_');
+        }
+
+        function wallPrice(density) {
+            if (!density) return null;
+            const raw = Number(density.price_raw);
+            if (!Number.isNaN(raw) && raw > 0) return raw;
+            const parsed = parseFloat(String(density.price || '').replace(/[^0-9.-]/g, ''));
+            return Number.isNaN(parsed) ? null : parsed;
+        }
+
+        function chartQuery(density) {
+            const params = new URLSearchParams();
+            const price = wallPrice(density);
+            if (price) params.set('price_line', String(price));
+            params.set('_', Date.now());
+            return params.toString();
+        }
+
+        function num(value, fallback = 999) {
+            const n = Number(value);
+            return Number.isNaN(n) ? fallback : n;
+        }
+
+        function flattenDensities(data) {
+            const rows = [];
+            Object.entries(data || {}).forEach(([exchange, pack]) => {
+                (pack.bids || []).forEach(d => rows.push({ ...d, exchange, side: 'bid' }));
+                (pack.asks || []).forEach(d => rows.push({ ...d, exchange, side: 'ask' }));
+            });
+            rows.sort((a, b) => {
+                const pa = num(a.percent_raw ?? a.percent);
+                const pb = num(b.percent_raw ?? b.percent);
+                if (pa !== pb) return pa - pb;
+                return num(b.life_time, 0) - num(a.life_time, 0);
+            });
+            return rows;
+        }
+
+        function renderFilters(exchanges, counts) {
+            const box = document.getElementById('filters');
+            const names = ['ALL', ...exchanges];
+            box.innerHTML = '';
+            names.forEach(name => {
+                const btn = document.createElement('button');
+                const n = name === 'ALL' ? counts.all : (counts[name] || 0);
+                btn.className = 'chip' + (activeExchange === name ? ' active' : '');
+                btn.textContent = name === 'ALL' ? `Все ${n}` : `${name} ${n}`;
+                btn.onclick = () => {
+                    activeExchange = name;
+                    renderTape(lastTape);
+                    renderFilters(exchanges, counts);
+                };
+                box.appendChild(btn);
+            });
+        }
+
+        function renderTape(rows) {
+            lastTape = rows;
+            const visible = activeExchange === 'ALL'
+                ? rows
+                : rows.filter(d => d.exchange === activeExchange);
+            const body = document.getElementById('tapeBody');
+            body.innerHTML = '';
+            if (!visible.length) {
+                body.innerHTML = '<tr><td class="empty" colspan="12">Нет живых стен старше 5 минут</td></tr>';
+                return;
+            }
+            const selectedKey = currentDensity ? densityKey(currentDensity) : '';
+            visible.forEach((density, index) => {
+                const row = document.createElement('tr');
+                const isBid = density.side === 'bid';
+                row.className = isBid ? 'buy' : 'sell';
+                const key = densityKey(density);
+                if (key === selectedKey) row.classList.add('selected');
+                row.dataset.key = key;
+                const chartId = createSafeId('chart', density.exchange, density.side, density.symbol, index);
+                row.innerHTML = `
+                    <td class="left"><span class="ex ${String(density.exchange).toLowerCase()}">${density.exchange}</span></td>
+                    <td class="left"><span class="side ${isBid ? 'bid' : 'ask'}">${isBid ? 'BID' : 'ASK'}</span></td>
+                    <td class="left"><span class="sym">${density.symbol}</span></td>
+                    <td>${density.price}</td>
+                    <td class="pct ${num(density.percent_raw ?? density.percent, 99) <= 1.5 ? 'near' : 'far'}">${density.percent}%</td>
+                    <td>${density.touch_count || 0}</td>
+                    <td>${density.bounce_count || 0}</td>
+                    <td>${density.life_time}</td>
+                    <td>${formatMinPercent(density.avg_size_five_klines)}</td>
+                    <td>${formatRatio(density.volume_ratio_avg)}</td>
+                    <td>${formatRatio(density.volume_ratio_last)}</td>
+                    <td><div class="mini-chart chart-loading" id="${chartId}"></div></td>
+                `;
+                row.addEventListener('click', () => openDensityChart(density));
+                body.appendChild(row);
+                setTimeout(() => loadMiniChart(density.exchange, density.symbol, density, chartId), index * 35);
+            });
+        }
+
+        function densityKey(d) {
+            return [d.exchange, d.symbol, d.side, wallPrice(d) || d.price].join('|');
+        }
+
+        function highlightTapeRow() {
+            const selectedKey = currentDensity ? densityKey(currentDensity) : '';
+            document.querySelectorAll('#tapeBody tr').forEach(tr => {
+                tr.classList.toggle('selected', tr.dataset.key === selectedKey);
+            });
+        }
+
+        function chartSlotHtml(label, src, alt) {
+            return (
+                `<div class="journal-chart-slot">` +
+                    `<div class="journal-chart-slot-label">${label}</div>` +
+                    `<img src="${src}" alt="${alt}">` +
+                `</div>`
+            );
+        }
+
+        async function openDensityChart(density) {
+            currentDensity = density;
+            highlightTapeRow();
+            const modal = document.getElementById('densityChartModal');
+            const title = document.getElementById('densityChartTitle');
+            const frame = document.getElementById('densityChartFrame');
+            const side = density.side === 'bid' ? 'BID' : 'ASK';
+            title.innerHTML = `${density.symbol} <span>${density.exchange} · ${side}</span>`;
+            frame.className = 'chart-modal-body';
+            frame.textContent = 'Загрузка графика...';
+            modal.classList.add('open');
+            try {
+                const response = await fetch(
+                    `/api/chart/full/${encodeURIComponent(density.exchange)}/${encodeURIComponent(density.symbol)}?${chartQuery(density)}`
+                );
+                const data = await response.json();
+                if (!data.success) {
+                    frame.textContent = 'Не удалось загрузить график';
+                    return;
+                }
+                const alt = `${density.symbol} ${density.exchange}`;
+                let html = '';
+                if (data.chart_1m) html += chartSlotHtml('1m', data.chart_1m, `${alt} 1m`);
+                if (data.chart_5m) html += chartSlotHtml('5m', data.chart_5m, `${alt} 5m`);
+                if (!html && data.chart) html = `<img src="${data.chart}" alt="${alt}" style="width:100%;height:100%;object-fit:contain;display:block;">`;
+                frame.innerHTML = html || 'Не удалось загрузить график';
+                if (data.chart_1m && data.chart_5m) frame.classList.add('two');
+            } catch (error) {
+                frame.textContent = 'Ошибка загрузки графика';
+            }
+        }
+
+        function closeDensityChart() {
+            currentDensity = null;
+            document.getElementById('densityChartModal').classList.remove('open');
+            document.getElementById('densityChartTitle').textContent = 'График';
+            const frame = document.getElementById('densityChartFrame');
+            frame.className = 'chart-modal-body';
+            frame.textContent = 'Выберите стену в ленте';
+            highlightTapeRow();
+        }
+
+        function loadTradingViewScript() {
+            return new Promise((resolve, reject) => {
+                if (window.TradingView) {
+                    resolve();
+                    return;
+                }
+                const existing = document.getElementById('tradingview-widget-script');
+                if (existing) {
+                    existing.addEventListener('load', () => resolve());
+                    existing.addEventListener('error', () => reject(new Error('TradingView script')));
+                    return;
+                }
+                const script = document.createElement('script');
+                script.id = 'tradingview-widget-script';
+                script.src = 'https://s3.tradingview.com/tv.js';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('TradingView script'));
+                document.head.appendChild(script);
+            });
+        }
+
+        async function openBtcChart() {
+            document.getElementById('btcChartBtn').classList.add('active');
+            document.getElementById('btcChartModal').classList.add('open');
+            if (btcTvReady) return;
+            const container = document.getElementById('btcTvChart');
+            container.textContent = 'Загрузка графика…';
+            try {
+                await loadTradingViewScript();
+                container.innerHTML = '';
+                await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                new TradingView.widget({
+                    autosize: true,
+                    symbol: 'BINANCE:BTCUSDT',
+                    interval: '5',
+                    timezone: 'Asia/Bangkok',
+                    theme: 'dark',
+                    style: '1',
+                    locale: 'ru',
+                    hide_side_toolbar: false,
+                    allow_symbol_change: false,
+                    withdateranges: true,
+                    container_id: 'btcTvChart',
+                });
+                btcTvReady = true;
+            } catch (error) {
+                container.textContent = 'Не удалось загрузить TradingView';
+            }
+        }
+
+        function closeBtcChart() {
+            document.getElementById('btcChartBtn').classList.remove('active');
+            document.getElementById('btcChartModal').classList.remove('open');
+        }
+
+        function applyMiniChart(chartDiv, chart, title) {
+            chartDiv.classList.remove('chart-loading');
+            chartDiv.title = title || '';
+            chartDiv.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = chart;
+            img.alt = title || 'chart';
+            chartDiv.appendChild(img);
+        }
+
+        async function loadMiniChart(exchange, symbol, density, chartId) {
+            const chartDiv = document.getElementById(chartId);
+            if (!chartDiv) return;
+            const cacheKey = `${exchange}-${symbol}-${wallPrice(density) || 'no-price'}`;
+            try {
+                if (chartCache.has(cacheKey)) {
+                    const cached = chartCache.get(cacheKey);
+                    applyMiniChart(chartDiv, cached.chart, cached.title);
+                    return;
+                }
+                const response = await fetch(`/api/chart/mini/${encodeURIComponent(exchange)}/${encodeURIComponent(symbol)}?${chartQuery(density)}`);
+                const data = await response.json();
+                if (data.success && data.chart) {
+                    const title = `${exchange} ${symbol}`;
+                    applyMiniChart(chartDiv, data.chart, title);
+                    chartCache.set(cacheKey, { chart: data.chart, title });
+                } else {
+                    showChartError(chartDiv, 'нет данных');
+                }
+            } catch (error) {
+                showChartError(chartDiv, 'ошибка');
+            }
+        }
+
+        function showChartError(chartDiv, message) {
+            chartDiv.classList.remove('chart-loading');
+            chartDiv.style.color = 'var(--ask)';
+            chartDiv.style.fontSize = '10px';
+            chartDiv.textContent = message;
+        }
+
+        function formatUsd(value) {
+            if (value === '' || value === null || value === undefined) return '';
+            const number = Number(value);
+            if (!Number.isFinite(number)) return value;
+            if (Math.abs(number) >= 1000) return Math.round(number).toLocaleString('en-US');
+            return number.toFixed(2);
+        }
+
+        function formatClosedAt(raw) {
+            if (!raw) return '';
+            const date = new Date(raw);
+            if (Number.isNaN(date.getTime())) {
+                return String(raw).replace('T', ' ').slice(0, 19);
+            }
+            return new Intl.DateTimeFormat('sv-SE', {
+                timeZone: 'Asia/Bangkok',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+            }).format(date);
+        }
+
+        function formatBtcMove(value, withLabel = false) {
+            if (value === '' || value === null || value === undefined) return '';
+            const number = Number(value);
+            if (!Number.isFinite(number)) return value;
+            const text = `${number > 0 ? '+' : ''}${number.toFixed(2)}%`;
+            return withLabel ? `BTC ${text}` : text;
+        }
+
+        function btcMoveClass(value) {
+            const number = Number(value);
+            if (!Number.isFinite(number) || number === 0) return '';
+            return number > 0 ? 'btc-up' : 'btc-down';
+        }
+
+        function formatMinPercent(value) {
+            if (value === '' || value === null || value === undefined) return '';
+            const number = Number(value);
+            if (!Number.isFinite(number)) return value;
+            return number.toFixed(2);
+        }
+
+        function formatFutByBasis(row, value) {
+            const basis = Number(row && row.basis_pct);
+            if (Number.isFinite(basis) && Math.abs(basis) > 1) return '—';
+            return formatMinPercent(value);
+        }
+
+        function formatTickPct(value) {
+            if (value === '' || value === null || value === undefined) return '';
+            const number = Number(value);
+            if (!Number.isFinite(number) || number <= 0) return '';
+            if (number >= 0.01) return number.toFixed(2);
+            let digits = 3;
+            while (digits < 6 && Number(number.toFixed(digits)) === 0) digits += 1;
+            return number.toFixed(digits);
+        }
+
+        function formatRatio(value) {
+            if (value === '' || value === null || value === undefined) return '';
+            const number = Number(value);
+            if (!Number.isFinite(number)) return value;
+            if (Math.abs(number) >= 100) return number.toFixed(1);
+            return number.toFixed(2);
+        }
+
+        function lifeMinutes(row) {
+            if (row.life_time_min !== undefined && row.life_time_min !== '') {
+                const minutes = Number(row.life_time_min);
+                if (Number.isFinite(minutes)) return Math.floor(minutes);
+            }
+            const raw = row.life_time_sec;
+            const number = Number(raw);
+            if (!Number.isFinite(number) || raw === '' || raw === null || raw === undefined) return '';
+            return number >= 200 ? Math.floor(number / 60) : Math.floor(number);
+        }
+
+        function outcomeClass(outcome) {
+            if (outcome === 'отскок') return 'outcome-bounce';
+            if (outcome === 'отскок фьюч') return 'outcome-bounce-fut';
+            if (outcome === 'пробой') return 'outcome-break';
+            if (outcome === 'разъедание') return 'outcome-eat';
+            if (outcome === 'подход') return 'outcome-touch';
+            if (outcome === 'Снятие без атаки') return 'outcome-pull-none';
+            return 'outcome-pull';
+        }
+
+        async function refreshJournal() {
+            try {
+            const response = await fetch('/api/outcomes?all=1');
+            const journal = await response.json();
+            if (!journal || journal.error) return;
+            const all = journal.all || {};
+            document.getElementById('journalSummary').innerHTML = `
+                Журнал
+                <span class="outcome-bounce">отскок ${all['отскок'] || 0}</span>
+                <span class="outcome-bounce-fut">отскок фьюч ${all['отскок фьюч'] || 0}</span>
+                <span class="outcome-touch">подход ${all['подход'] || 0}</span>
+                <span class="outcome-pull">снятие ${all['снятие'] || 0}</span>
+                <span class="outcome-pull-none">без атаки ${all['Снятие без атаки'] || 0}</span>
+                <span class="outcome-eat">разъедание ${all['разъедание'] || 0}</span>
+                <span class="outcome-break">пробой ${all['пробой'] || 0}</span>
+                <span title="Строки журнала: подход, отскок, закрытие">записей ${journal.total || 0}</span>
+                <span title="Уникальные плотности по id стены">ситуаций ${journal.walls || 0}</span>
+            `;
+            lastJournalRows = journal.recent || [];
+            renderJournalExchangeFilters();
+            renderJournalRows();
+            } catch (error) {
+                console.error('journal refresh failed', error);
+            }
+        }
+
+        async function refreshAllData() {
+            try {
+                const [densRes, statusRes] = await Promise.all([
+                    fetch('/api/densities'),
+                    fetch('/api/status')
+                ]);
+                const data = await densRes.json();
+                const statusData = await statusRes.json();
+                const exchanges = Object.keys(data);
+                const rows = flattenDensities(data);
+                const counts = { all: rows.length };
+                exchanges.forEach(name => {
+                    counts[name] = (data[name].bids || []).length + (data[name].asks || []).length;
+                });
+                renderFilters(exchanges, counts);
+                renderTape(rows);
+                if (currentDensity) {
+                    const still = rows.find(d => densityKey(d) === densityKey(currentDensity));
+                    currentDensity = still || currentDensity;
+                }
+                const running = statusData.is_running;
+                document.getElementById('statusText').innerHTML =
+                    `<span class="dot ${running ? 'on' : ''}"></span>${running ? 'сканер' : 'стоп'}`;
+                document.getElementById('wallCount').textContent = `стен: ${rows.length}`;
+                document.getElementById('updateTime').textContent = new Date().toLocaleTimeString();
+                await refreshJournal();
+            } catch (error) {
+                console.error(error);
+                document.getElementById('statusText').innerHTML = '<span class="dot"></span>ошибка';
+            }
+        }
+    </script>
+</body>
+</html>
